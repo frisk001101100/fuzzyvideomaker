@@ -56,7 +56,7 @@ function renderFrame({ ctx, time, duration, width, height, assets }) {
 }
 \`\`\`
 
-The browser encodes frames with Mediabunny/WebCodecs to MP4 or WebM. Encoding support depends on the browser and available codecs. Rendering is local and can be CPU- and memory-intensive for long or high-resolution projects; start with 720 × 1280 and 30 FPS.
+The browser currently encodes MP4 with Mediabunny/WebCodecs. Where the File System Access API is available, the export streams directly to the chosen file; otherwise it uses an in-memory buffer. The first imported audio file is added as the soundtrack. Codec availability depends on the browser. Rendering is local and can be CPU-, battery- and memory-intensive; start with 720 × 1280 and 30 FPS.
 
 ## Inspiration and boundaries
 
@@ -72,4 +72,5 @@ These are references, not copied account branding or an After Effects workflow.
 - No server-side AI video/image generation.
 - No team cloud sync or account system in this initial local-first version.
 - AI generation requires the creator's own provider API key and may incur provider charges.
-- MP4/WebM export depends on browser WebCodecs codec support and device resources.
+- MP4 export depends on browser WebCodecs codec support and device resources. Only the first imported audio file is used as a soundtrack in this MVP; advanced audio mixing is not implemented yet.
+- Project metadata and scripts are saved in localStorage; imported media files are stored in IndexedDB. The JSON backup includes metadata and scripts, not the media bytes.
