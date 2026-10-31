@@ -1,4 +1,4 @@
-# What If Studio · FuzzyVideoMaker
+# Fuzzy VM
 
 A browser-first video studio for branching short-form stories, Reels, Shorts, explainers and commercials.
 
@@ -62,7 +62,7 @@ The browser currently encodes MP4 with Mediabunny/WebCodecs. Where the File Syst
 
 - [Instagram agent skill](https://github.com/Jakeschincariol/instagram-agent-skill): hook structure, timed beats, caption craft and human approval. This app does not scrape Instagram or automate posting.
 - [Awesome Opus 5.5 Videos](https://github.com/yihui-dev/awesome-opus5-5-videos): examples of models writing HTML/Canvas/SVG/Three.js code to create animations. Used as a reference catalogue, not as a bundled video-generation service.
-- The previous [What If Studio MVP](https://github.com/frisk001101100/what-if-studio) is a feature reference for project continuity, story branches and local-first creation. This repository is the new product base.
+- The previous [Fuzzy MVP](https://github.com/frisk001101100/what-if-studio) is a feature reference for project continuity, story branches and local-first creation. This repository is the new product base.
 
 These are references, not copied account branding or an After Effects workflow.
 
