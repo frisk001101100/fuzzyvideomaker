@@ -126,6 +126,9 @@ async function providerRequest(input) {
 
 export default async function handler(req, res) {
   res.setHeader("Vary", "Origin");
+  if (req.method === "GET") {
+    return send(res, 200, { ok: true, service: "fuzzy-vm-generation", accepts: ["POST"], providers: ["openai", "anthropic", "gemini"], rendering: "browser" });
+  }
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return send(res, 403, { error: "Origem não autorizada." });
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
