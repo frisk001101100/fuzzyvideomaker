@@ -29,7 +29,7 @@ Build a polished Portuguese-first creator studio for Reels, Shorts and TikTok-st
 - \`frisk001101100/what-if-studio\`: older feature reference for story projects, scenes, branching consequences and local-first workflows. The canonical destination is this repository.
 
 ## Engineering and testing
-- Node.js 20+.
+- Node.js 24+.
 - Run \`npm run check\` to syntax-check client and API JavaScript.
 - Run locally with \`npm install\` then \`npx vercel dev\`.
 - Keep the app usable without an AI key; demo code and local editing must work without provider accounts.
