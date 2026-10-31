@@ -1,4 +1,4 @@
-# AGENTS.md — What If Studio / FuzzyVideoMaker
+# AGENTS.md — Fuzzy VM / FuzzyVideoMaker
 
 ## Product goal
 Build a polished Portuguese-first creator studio for Reels, Shorts and TikTok-style videos, especially branching "what if?" stories. The model writes a program; the browser executes it and renders the video from creator-supplied assets.
