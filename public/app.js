@@ -206,7 +206,7 @@ function frameDocument(){
  "else if(a.kind==='video'||a.kind==='audio'){const el=document.createElement(a.kind);el.src=url;el.preload='auto';el.muted=true;el.playsInline=true;await new Promise(ok=>{if(el.readyState>=1)ok();else{el.onloadedmetadata=ok;el.onerror=ok;setTimeout(ok,4000);}});item.element=el;}",
  "else if(a.kind==='font'){const family='UserFont_'+a.id.replace(/[^a-z0-9]/gi,'');const face=new FontFace(family,'url('+url+')');await face.load();document.fonts.add(face);item.family=family;item.element=face;}",
  "assets[a.id]=item;}",
- "async function draw(t){current=Math.max(0,Math.min(D,Number(t)||0));for(const id in assets){const a=assets[id];if(a.kind==='video'&&a.element&&Number.isFinite(a.element.duration)){const target=Math.min(current,Math.max(0,a.element.duration-.05));if(Math.abs(a.element.currentTime-target)>.04){await new Promise(resolve=>{let finished=false;const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);a.element.removeEventListener('seeked',finish);a.element.removeEventListener('error',finish);resolve();};const timer=setTimeout(finish,2500);a.element.addEventListener('seeked',finish,{once:true});a.element.addEventListener('error',finish,{once:true});try{a.element.currentTime=target;}catch(e){finish();}});}}}if(!renderFn)throw new Error('Código ainda não carregado.');ctx.clearRect(0,0,W,H);renderFn({ctx:ctx,time:current,duration:D,width:W,height:H,assets:assets,canvas:canvas});}",
+ "async function draw(t,waitForVideo=false){current=Math.max(0,Math.min(D,Number(t)||0));for(const id in assets){const a=assets[id];if(a.kind==='video'&&a.element&&Number.isFinite(a.element.duration)){const target=Math.min(current,Math.max(0,a.element.duration-.05));if(Math.abs(a.element.currentTime-target)>(waitForVideo?.04:.15)){if(waitForVideo){await new Promise(resolve=>{let finished=false;const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);a.element.removeEventListener('seeked',finish);a.element.removeEventListener('error',finish);resolve();};const timer=setTimeout(finish,2500);a.element.addEventListener('seeked',finish,{once:true});a.element.addEventListener('error',finish,{once:true});try{a.element.currentTime=target;}catch(e){finish();}});}else{try{a.element.currentTime=target;}catch(e){}}}}}if(!renderFn)throw new Error('Código ainda não carregado.');ctx.clearRect(0,0,W,H);renderFn({ctx:ctx,time:current,duration:D,width:W,height:H,assets:assets,canvas:canvas});}",
  "async function loop(now){if(!playing)return;current=(now-start)/1000;if(current>=D){current=D;playing=false;}try{await draw(current);send('tick',{time:current,duration:D});}catch(e){playing=false;fail(e);}if(playing)raf=requestAnimationFrame(loop);else send('paused',{time:current});}",
  "async function init(m){nonce=m.nonce;W=m.width||720;H=m.height||1280;D=m.duration||30;canvas.width=W;canvas.height=H;assets={};",
  "for(const a of (m.assets||[])){try{await loadAsset(a);}catch(e){send('asset-error',{name:a.name,message:String(e.message||e)});}}",
@@ -214,8 +214,8 @@ function frameDocument(){
  "window.addEventListener('message',async ev=>{const m=ev.data||{};if(m.source!=='whatif-parent')return;if(m.type==='init'){init(m);return;}if(m.nonce!==nonce)return;",
  "if(m.type==='play'&&!playing){playing=true;start=performance.now()-current*1000;raf=requestAnimationFrame(loop);}",
  "if(m.type==='pause'){playing=false;cancelAnimationFrame(raf);send('paused',{time:current});}",
- "if(m.type==='seek'){playing=false;cancelAnimationFrame(raf);try{await draw(m.time);send('tick',{time:current,duration:D});}catch(e){fail(e);}}",
- "if(m.type==='frame'){playing=false;cancelAnimationFrame(raf);activeRequestId=m.requestId;try{await draw(m.time);const bmp=await createImageBitmap(canvas);parent.postMessage({source:'whatif-frame',type:'frame',nonce:nonce,requestId:m.requestId,bitmap:bmp},'*',[bmp]);}catch(e){fail(e);}finally{activeRequestId=null;}}",
+ "if(m.type==='seek'){playing=false;cancelAnimationFrame(raf);try{await draw(m.time,false);send('tick',{time:current,duration:D});}catch(e){fail(e);}}",
+ "if(m.type==='frame'){playing=false;cancelAnimationFrame(raf);activeRequestId=m.requestId;try{await draw(m.time,true);const bmp=await createImageBitmap(canvas);parent.postMessage({source:'whatif-frame',type:'frame',nonce:nonce,requestId:m.requestId,bitmap:bmp},'*',[bmp]);}catch(e){fail(e);}finally{activeRequestId=null;}}",
  "});send('boot');})();"
  ].join("\n");
  return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'; style-src \'unsafe-inline\'; img-src blob: data:; media-src blob: data:; font-src blob: data:; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080a10}canvas{width:100%;height:100%;display:block;object-fit:contain}</style></head><body><canvas id="c"></canvas><script>'+script+'<\/script></body></html>';
@@ -246,7 +246,7 @@ async function refreshPreview(quiet){
 }
 function requestFrame(time){
  return new Promise(function(resolve,reject){
-  const requestId=uid(),timer=setTimeout(function(){state.frameWaiters.delete(requestId);reject(new Error("A prévia demorou demais para desenhar um frame."));},8000);
+  const requestId=uid(),timer=setTimeout(function(){state.frameWaiters.delete(requestId);reject(new Error("A prévia demorou demais para desenhar um frame."));},15000);
   state.frameWaiters.set(requestId,function(data){clearTimeout(timer);if(data.error)reject(new Error(data.error));else resolve(data.bitmap);});
   postToFrame({type:"frame",nonce:state.frameNonce,time:time,requestId:requestId});
  });
