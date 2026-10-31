@@ -192,3 +192,86 @@ async function removeAsset(id){
  p.assets=p.assets.filter(function(a){return a.id!==id;});state.liveAssets=state.liveAssets.filter(function(a){return a.id!==id;});
  try{await deleteAssetFile(id);}catch(e){}updateProject(p);render();
 }
+
+function frameDocument(){
+ const script=[
+ "(function(){",
+ "const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});let W=720,H=1280,D=30,renderFn=null,assets={},playing=false,start=0,current=0,raf=0,nonce='';",
+ "function send(type,extra){parent.postMessage(Object.assign({source:'whatif-frame',type:type,nonce:nonce},extra||{}),'*');}",
+ "function fail(err){send('error',{message:String(err&&err.message||err).slice(0,700)});}",
+ "async function loadAsset(a){const file=a.file,url=URL.createObjectURL(file),item={id:a.id,name:a.name,kind:a.kind,url:url,file:file,element:null,family:null};",
+ "if(a.kind==='image'){const el=new Image();el.src=url;await el.decode();item.element=el;}",
+ "else if(a.kind==='video'||a.kind==='audio'){const el=document.createElement(a.kind);el.src=url;el.preload='auto';el.muted=true;el.playsInline=true;await new Promise(ok=>{if(el.readyState>=1)ok();else{el.onloadedmetadata=ok;el.onerror=ok;setTimeout(ok,4000);}});item.element=el;}",
+ "else if(a.kind==='font'){const family='UserFont_'+a.id.replace(/[^a-z0-9]/gi,'');const face=new FontFace(family,'url('+url+')');await face.load();document.fonts.add(face);item.family=family;item.element=face;}",
+ "assets[a.id]=item;}",
+ "function draw(t){current=Math.max(0,Math.min(D,Number(t)||0));for(const id in assets){const a=assets[id];if(a.kind==='video'&&a.element&&Number.isFinite(a.element.duration)){const target=Math.min(current,Math.max(0,a.element.duration-.05));if(Math.abs(a.element.currentTime-target)>.15){try{a.element.currentTime=target;}catch(e){}}}}",
+ "if(!renderFn)throw new Error('Código ainda não carregado.');ctx.clearRect(0,0,W,H);renderFn({ctx:ctx,time:current,duration:D,width:W,height:H,assets:assets,canvas:canvas});}",
+ "function loop(now){if(!playing)return;current=(now-start)/1000;if(current>=D){current=D;playing=false;}try{draw(current);send('tick',{time:current,duration:D});}catch(e){playing=false;fail(e);}if(playing)raf=requestAnimationFrame(loop);else send('paused',{time:current});}",
+ "async function init(m){nonce=m.nonce;W=m.width||720;H=m.height||1280;D=m.duration||30;canvas.width=W;canvas.height=H;assets={};",
+ "for(const a of (m.assets||[])){try{await loadAsset(a);}catch(e){send('asset-error',{name:a.name,message:String(e.message||e)});}}",
+ "try{renderFn=new Function(m.code+'; return (typeof renderFrame === \"function\") ? renderFrame : null;')();if(!renderFn)throw new Error('Defina function renderFrame({ctx,time,duration,width,height,assets}).');draw(0);send('ready',{width:W,height:H});}catch(e){fail(e);}}",
+ "window.addEventListener('message',async ev=>{const m=ev.data||{};if(m.source!=='whatif-parent')return;if(m.type==='init'){init(m);return;}if(m.nonce!==nonce)return;",
+ "if(m.type==='play'&&!playing){playing=true;start=performance.now()-current*1000;raf=requestAnimationFrame(loop);}",
+ "if(m.type==='pause'){playing=false;cancelAnimationFrame(raf);send('paused',{time:current});}",
+ "if(m.type==='seek'){playing=false;cancelAnimationFrame(raf);try{draw(m.time);send('tick',{time:current,duration:D});}catch(e){fail(e);}}",
+ "if(m.type==='frame'){playing=false;cancelAnimationFrame(raf);try{draw(m.time);const bmp=await createImageBitmap(canvas);parent.postMessage({source:'whatif-frame',type:'frame',nonce:nonce,requestId:m.requestId,bitmap:bmp},'*',[bmp]);}catch(e){fail(e);}}",
+ "});send('boot');})();"
+ ].join("\n");
+ return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'; style-src \'unsafe-inline\'; img-src blob: data:; media-src blob: data:; font-src blob: data:; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080a10}canvas{width:100%;height:100%;display:block;object-fit:contain}</style></head><body><canvas id="c"></canvas><script>'+script+'<\/script></body></html>';
+}
+function ratioSize(ratio){
+ if(ratio==="1:1")return {width:1080,height:1080};
+ if(ratio==="16:9")return {width:1280,height:720};
+ return {width:720,height:1280};
+}
+function postToFrame(message){
+ const frame=document.getElementById("video-preview");
+ if(frame&&frame.contentWindow)frame.contentWindow.postMessage(Object.assign({source:"whatif-parent"},message),"*");
+}
+async function refreshPreview(quiet){
+ const p=currentProject(),frame=document.getElementById("video-preview");
+ if(!p||!frame)return;
+ state.previewReady=false;
+ const status=document.getElementById("preview-status");if(status)status.textContent="CARREGANDO...";
+ try{
+  if(!state.liveAssets.length&&(p.assets||[]).length)await hydrateProjectAssets(p);
+  const assets=state.liveAssets.map(function(a){return {id:a.id,name:a.name,kind:a.kind,file:a.file};});
+  const dim=ratioSize(p.ratio),nonce=uid();state.frameNonce=nonce;
+  frame.onload=function(){
+   frame.contentWindow.postMessage({source:"whatif-parent",type:"init",nonce:nonce,code:p.code||DEMO_CODE,assets:assets,width:dim.width,height:dim.height,duration:Number(p.duration||30)},"*");
+  };
+  frame.srcdoc=frameDocument();
+ }catch(err){if(!quiet)toast("Não foi possível preparar a prévia: "+err.message,"error");}
+}
+function requestFrame(time){
+ return new Promise(function(resolve,reject){
+  const requestId=uid(),timer=setTimeout(function(){state.frameWaiters.delete(requestId);reject(new Error("A prévia demorou demais para desenhar um frame."));},8000);
+  state.frameWaiters.set(requestId,function(data){clearTimeout(timer);if(data.error)reject(new Error(data.error));else resolve(data.bitmap);});
+  postToFrame({type:"frame",nonce:state.frameNonce,time:time,requestId:requestId});
+ });
+}
+function readEditorIntoProject(){
+ const p=currentProject();if(!p)return;
+ const premise=document.getElementById("premise-input"),script=document.getElementById("script-input"),code=document.getElementById("code-input"),desc=document.getElementById("scene-description"),sceneDuration=document.getElementById("scene-duration"),poll=document.getElementById("poll-input"),tone=document.getElementById("tone-input"),duration=document.getElementById("duration-input"),ratio=document.getElementById("ratio-input");
+ if(premise)p.prompt=premise.value;if(script)p.script=script.value;if(code)p.code=code.value;if(poll)p.poll=poll.value;if(tone)p.tone=tone.value;
+ if(duration)p.duration=Math.max(5,Math.min(600,Number(duration.value)||30));if(ratio)p.ratio=ratio.value;
+ const scene=p.scenes[state.selectedScene];if(scene){if(desc)scene.description=desc.value;if(sceneDuration)scene.duration=Math.max(1,Math.min(180,Number(sceneDuration.value)||5));}
+ document.querySelectorAll("[data-branch]").forEach(function(el){const i=Number(el.dataset.branch);if(p.branches[i])p.branches[i][el.dataset.prop]=el.value;});
+ updateProject(p);
+}
+function syncProjectInputs(){
+ const p=currentProject();if(!p)return;
+ const duration=document.getElementById("duration-input"),ratio=document.getElementById("ratio-input");
+ if(duration)p.duration=Math.max(5,Math.min(600,Number(duration.value)||30));if(ratio)p.ratio=ratio.value;updateProject(p);
+}
+function showHookScore(){
+ const p=currentProject();if(!p)return;
+ const textValue=(p.script||"").trim(),first=(textValue.split(/[.!?\n]/)[0]||"").trim(),words=first.split(/\s+/).filter(Boolean);
+ let score=45;const lower=first.toLowerCase();
+ if(/^(e se|imagine|ningu[eé]m|o que aconteceria|por que|como seria)/i.test(lower))score+=16;
+ if(/\d/.test(first))score+=10;if(words.length>=5&&words.length<=14)score+=12;if(/[!?]/.test(first))score+=7;
+ if(/hoje|neste vídeo|olá|oi pessoal|bem-vindos/i.test(lower))score-=18;if(first.length>115)score-=15;
+ score=Math.max(0,Math.min(100,score));
+ const box=document.getElementById("hook-score");
+ if(box)box.innerHTML='<div class="score-row"><div class="score-number">'+score+'</div><div class="score-copy"><strong>Heurística de gancho · '+(score>=75?"Forte":score>=55?"Razoável":"Precisa de trabalho")+'</strong><span>“'+esc(first||"Adicione um roteiro para analisar o gancho.")+'”<br>Regra local simples; não prevê viralização nem substitui dados reais de retenção.</span></div></div>';
+}
