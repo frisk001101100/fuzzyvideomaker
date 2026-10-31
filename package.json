@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vercel dev",
-    "check": "node --check app.js && node --check api/generate.js"
+    "check": "node --check app.js && node --check api/generate.js",
+    "test": "node --test"
   }
 }
