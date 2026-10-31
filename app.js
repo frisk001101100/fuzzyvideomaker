@@ -46,11 +46,11 @@ function ic(n){
 }
 function navItem(page,ico,label){return '<button class="nav-item '+(state.page===page?"active":"")+'" data-act="navigate" data-page="'+page+'">'+ic(ico)+'<span>'+label+'</span></button>';}
 function sidebar(){
- return '<aside class="sidebar"><div class="brand"><div class="brand-mark">W.</div><div><div class="brand-name">What If Studio</div><div class="brand-caption">FUZZY VIDEOMAKER</div></div></div><div class="nav-section">WORKSPACE</div><nav class="nav-list">'+navItem("dashboard","grid","Início")+navItem("studio","clapper","Editor de vídeo")+navItem("settings","settings","Configurações")+'</nav><div class="sidebar-spacer"></div><div class="sidebar-card"><div class="sidebar-card-label">LOCAL-FIRST STUDIO</div><p>Seus projetos ficam neste navegador. Chaves de IA não são salvas.</p><button class="btn btn-small btn-full" data-act="navigate" data-page="settings">Configurar IA '+ic("arrow")+'</button></div><div class="sidebar-foot"><div class="avatar">W</div><div class="foot-copy"><strong>Creator workspace</strong><span>Renderização local ativada</span></div></div></aside>';
+ return '<aside class="sidebar"><div class="brand"><div class="brand-mark">W.</div><div><div class="brand-name">Fuzzy</div><div class="brand-caption">VIDEO MAKER</div></div></div><div class="nav-section">WORKSPACE</div><nav class="nav-list">'+navItem("dashboard","grid","Início")+navItem("studio","clapper","Editor de vídeo")+navItem("settings","settings","Configurações")+'</nav><div class="sidebar-spacer"></div><div class="sidebar-card"><div class="sidebar-card-label">LOCAL-FIRST STUDIO</div><p>Seus projetos ficam neste navegador. Chaves de IA não são salvas.</p><button class="btn btn-small btn-full" data-act="navigate" data-page="settings">Configurar IA '+ic("arrow")+'</button></div><div class="sidebar-foot"><div class="avatar">W</div><div class="foot-copy"><strong>Creator workspace</strong><span>Renderização local ativada</span></div></div></aside>';
 }
 function topbar(){
  const title=state.page==="studio"?"Editor":state.page==="settings"?"Configurações":"Workspace";
- return '<header class="topbar"><div class="topbar-left"><button class="mobile-menu" data-act="toggle-mobile-nav">'+ic("menu")+'</button><div class="breadcrumb"><span>What If Studio</span><span>/</span><strong>'+title+'</strong></div></div><div class="top-actions"><span class="status-pill"><i class="status-dot"></i> ARQUIVOS LOCAIS</span><button class="btn btn-small" data-act="navigate" data-page="settings">'+ic("settings")+' Preferências</button></div></header>';
+ return '<header class="topbar"><div class="topbar-left"><button class="mobile-menu" data-act="toggle-mobile-nav">'+ic("menu")+'</button><div class="breadcrumb"><span>Fuzzy</span><span>/</span><strong>'+title+'</strong></div></div><div class="top-actions"><span class="status-pill"><i class="status-dot"></i> ARQUIVOS LOCAIS</span><button class="btn btn-small" data-act="navigate" data-page="settings">'+ic("settings")+' Preferências</button></div></header>';
 }
 function bottomNav(){
  return '<nav class="mobile-bottom"><button class="'+(state.page==="dashboard"?"active":"")+'" data-act="navigate" data-page="dashboard">'+ic("grid")+'<span>Início</span></button><button class="'+(state.page==="studio"?"active":"")+'" data-act="navigate" data-page="studio">'+ic("clapper")+'<span>Editor</span></button><button class="'+(state.page==="settings"?"active":"")+'" data-act="navigate" data-page="settings">'+ic("settings")+'<span>Ajustes</span></button></nav>';
@@ -420,7 +420,7 @@ function exportProject(){
  downloadFile((p.title||"projeto").replace(/[^a-z0-9]+/gi,"-")+".json",JSON.stringify(p,null,2),"application/json");
 }
 function exportBackup(){
- downloadFile("what-if-studio-backup.json",JSON.stringify({version:1,projects:state.projects},null,2),"application/json");
+ downloadFile("fuzzy-backup.json",JSON.stringify({version:1,projects:state.projects},null,2),"application/json");
 }
 function clearProjects(){
  if(!confirm("Apagar todos os projetos salvos neste navegador? Isso não pode ser desfeito. Exporte um backup antes."))return;
