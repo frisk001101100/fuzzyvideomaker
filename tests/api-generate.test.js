@@ -142,6 +142,44 @@ test("forwards Gemini requests and extracts candidate text", async () => {
   }
 });
 
+test("returns a clear error when OpenAI truncates output at its token limit", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    text: async () => JSON.stringify({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ content: [{ type: "output_text", text: "partial code" }] }]
+    })
+  });
+  try {
+    const res = await invoke(request("POST", {
+      provider: "openai", model: "gpt-6-mini", apiKey: "sk-test-key-123456", prompt: "Generate"
+    }));
+    assert.equal(res.statusCode, 502);
+    assert.match(res.body.error, /limite de saída/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preserves provider authentication errors as HTTP 401", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false, status: 401,
+    text: async () => JSON.stringify({ error: { message: "Invalid API key" } })
+  });
+  try {
+    const res = await invoke(request("POST", {
+      provider: "openai", model: "gpt-6-mini", apiKey: "sk-test-key-123456", prompt: "Generate"
+    }));
+    assert.equal(res.statusCode, 401);
+    assert.match(res.body.error, /Invalid API key/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("maps provider rate limits to HTTP 429", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
