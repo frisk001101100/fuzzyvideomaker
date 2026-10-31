@@ -293,14 +293,14 @@ async function callAI(mode){
  if(!state.providerKey){state.page="settings";render();toast("Configure uma chave de API para gerar conteúdo.","error");return;}
  if(!state.model.trim()){toast("Informe o identificador de modelo do provedor.","error");return;}
  const status=document.getElementById("ai-status");if(status)status.textContent="Enviando solicitação ao modelo...";
- const assets=(p.assets||[]).map(function(a){return a.name+" ("+a.kind+")";}).join(", ");
+ const assets=(p.assets||[]).map(function(a){return "ID "+a.id+" | "+a.name+" | "+a.kind;}).join("\n");
  const scenes=p.scenes.map(function(s,i){return (i+1)+". "+s.title+" — "+s.description+" ("+s.duration+"s)";}).join("\n");
  let instructions="",prompt="";
  if(mode==="story"){
   instructions="Você é roteirista e diretor criativo de vídeos curtos verticais. Escreva em português brasileiro natural, com ritmo oral, imagens concretas, cortes frequentes e causalidade clara. Não prometa viralização. Sem conteúdo sexual explícito, violência gráfica ou autolesão. Retorne somente roteiro organizado por timecodes, narração, visual e som. Termine com pergunta clara e opções de enquete com consequências narrativas distintas.";
   prompt="PROJETO: "+p.title+"\nFORMATO: "+p.format+"\nPLATAFORMA: "+p.platform+"\nDURAÇÃO: "+p.duration+" segundos\nTOM: "+p.tone+"\nIDEIA: "+p.prompt+"\nCENAS PLANEJADAS:\n"+scenes+"\nRAMIFICAÇÕES:\n"+p.branches.map(function(b){return b.label+": "+b.consequence;}).join("\n")+"\nASSETS DISPONÍVEIS: "+assets+"\n\nCrie um roteiro completo para a duração indicada, com gancho imediato, batidas cronometradas e cliffhanger.";
  }else{
-  instructions="Você é um engenheiro criativo de motion design. Gere JavaScript puro executável no Canvas 2D. Retorne APENAS código JavaScript, sem Markdown. Defina exatamente function renderFrame({ ctx, time, duration, width, height, assets }). A função desenha o frame inteiro com determinismo temporal. Use ctx, gradients, formas, tipografia e transições suaves. Não use fetch, rede, imports, DOM, módulos, timers, APIs de sistema ou dependências externas. Não acesse assets por caminho arbitrário: use o mapa assets recebido; cada item tem kind, element, name e, para fontes, family. Desenhe com fallback se assets estiver vazio. Evite loops infinitos e operações caras. Faça layout legível em 9:16 e mantenha textos dentro da área segura. Não gere vídeo por IA.";
+  instructions="Você é um engenheiro criativo de motion design. Gere JavaScript puro executável no Canvas 2D. Retorne APENAS código JavaScript, sem Markdown. Defina exatamente function renderFrame({ ctx, time, duration, width, height, assets }). A função desenha o frame inteiro com determinismo temporal. Use ctx, gradients, formas, tipografia e transições suaves. Não use fetch, rede, imports, DOM, módulos, timers, APIs de sistema ou dependências externas. Use assets pelo ID exato listado no prompt: assets["ID"].element. Para imagens e vídeos, desenhe o elemento com ctx.drawImage; para fontes, use assets["ID"].family em ctx.font. Cada item tem kind, element, name e, para fontes, family. Desenhe com fallback se assets estiver vazio. Evite loops infinitos e operações caras. Faça layout legível em 9:16 e mantenha textos dentro da área segura. Não gere vídeo por IA.";
   prompt="Crie código de animação para o projeto "+p.title+".\nIdeia: "+p.prompt+"\nRoteiro: "+p.script+"\nCenas:\n"+scenes+"\nDuração: "+p.duration+"s\nProporção: "+p.ratio+"\nAssets: "+assets+"\n\nQuero motion graphics original, composição pensada, ritmo visual e gancho forte. Canvas width e height são dinâmicos. Desenhe tudo a partir de time.";
  }
  try{
@@ -340,7 +340,12 @@ async function exportVideo(){
   if(caption)caption.textContent="Carregando codificador no dispositivo...";
   const mb=await import("https://esm.sh/mediabunny");
   const size=ratioSize(p.ratio),canvas=document.createElement("canvas");canvas.width=size.width;canvas.height=size.height;
-  const ctx=canvas.getContext("2d",{alpha:false}),target=new mb.BufferTarget();
+  const ctx=canvas.getContext("2d",{alpha:false});
+  let target,fileHandle=null;
+  if(typeof window.showSaveFilePicker==="function"){
+   fileHandle=await window.showSaveFilePicker({suggestedName:(p.title||"what-if-video").replace(/[^a-z0-9]+/gi,"-")+".mp4",types:[{description:"Vídeo MP4",accept:{"video/mp4":[".mp4"]}}]});
+   const writable=await fileHandle.createWritable();target=new mb.StreamTarget(writable,{chunked:true});
+  }else{target=new mb.BufferTarget();}
   let audioBuffer=null;
   const sound=state.liveAssets.find(function(a){return a.kind==="audio"&&a.file;});
   if(sound){
@@ -375,10 +380,12 @@ async function exportVideo(){
   }
   videoSource.close();if(caption)caption.textContent="Finalizando arquivo MP4...";
   await output.finalize();
-  const blob=new Blob([target.buffer],{type:"video/mp4"}),url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download=(p.title||"what-if-video").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+".mp4";a.click();
-  setTimeout(function(){URL.revokeObjectURL(url);},60000);
-  toast("Vídeo MP4 exportado no dispositivo.","success");if(caption)caption.textContent="Concluído · "+bytes(blob.size);if(bar)bar.style.width="100%";
+  if(fileHandle){toast("Vídeo MP4 salvo no local escolhido.","success");if(caption)caption.textContent="Concluído · arquivo salvo no dispositivo.";}else{
+   const blob=new Blob([target.buffer],{type:"video/mp4"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+   a.href=url;a.download=(p.title||"what-if-video").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+".mp4";a.click();setTimeout(function(){URL.revokeObjectURL(url);},60000);
+   toast("Vídeo MP4 exportado no dispositivo.","success");if(caption)caption.textContent="Concluído · "+bytes(blob.size);
+  }
+  if(bar)bar.style.width="100%";
  }catch(err){
   toast(err.message||"Falha na exportação.","error");if(caption)caption.textContent=err.message||"Falha na exportação.";
  }finally{
