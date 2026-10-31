@@ -317,3 +317,124 @@ async function callAI(mode){
   const s=document.getElementById("ai-status");if(s)s.textContent="Falha: "+err.message;
  }
 }
+
+function loadDemoCode(){
+ const p=currentProject();if(!p)return;p.code=DEMO_CODE;updateProject(p);state.activeTab="code";render();refreshPreview(false);toast("Exemplo visual carregado.","success");
+}
+async function togglePreview(){
+ if(!state.previewReady){toast("A prévia ainda está carregando. Tente novamente em instantes.");return;}
+ state.playing=!state.playing;postToFrame({type:state.playing?"play":"pause",nonce:state.frameNonce});
+ const b=document.querySelector('[data-act="toggle-preview"]');if(b)b.innerHTML=ic(state.playing?"pause":"play");
+}
+async function exportVideo(){
+ const p=currentProject();if(!p||!state.previewReady){toast("Atualize e aguarde a prévia antes de exportar.","error");return;}
+ readEditorIntoProject();
+ const button=document.getElementById("export-btn"),progress=document.getElementById("export-progress"),bar=document.getElementById("export-progress-bar"),caption=document.getElementById("export-progress-caption");
+ const duration=Math.max(1,Number(p.duration)||30),fps=Number((document.getElementById("fps-input")||{}).value||30),total=Math.ceil(duration*fps);
+ if(total>18000){toast("Este projeto excede o limite local de quadros desta versão. Reduza a duração ou o FPS.","error");return;}
+ state.exportCancel=false;state.playing=false;postToFrame({type:"pause",nonce:state.frameNonce});
+ if(progress)progress.classList.add("show");if(button)button.disabled=true;
+ let output=null,audioContext=null;
+ try{
+  if(!("VideoEncoder" in window))throw new Error("Este navegador não oferece WebCodecs. Tente uma versão atual do Chrome ou Edge.");
+  if(caption)caption.textContent="Carregando codificador no dispositivo...";
+  const mb=await import("https://esm.sh/mediabunny");
+  const size=ratioSize(p.ratio),canvas=document.createElement("canvas");canvas.width=size.width;canvas.height=size.height;
+  const ctx=canvas.getContext("2d",{alpha:false}),target=new mb.BufferTarget();
+  let audioBuffer=null;
+  const sound=state.liveAssets.find(function(a){return a.kind==="audio"&&a.file;});
+  if(sound){
+   try{
+    audioContext=new (window.AudioContext||window.webkitAudioContext)();
+    const decoded=await audioContext.decodeAudioData(await sound.file.arrayBuffer());
+    const length=Math.min(Math.floor(duration*decoded.sampleRate),decoded.length);
+    audioBuffer=audioContext.createBuffer(decoded.numberOfChannels,length,decoded.sampleRate);
+    for(let ch=0;ch<decoded.numberOfChannels;ch++)audioBuffer.getChannelData(ch).set(decoded.getChannelData(ch).subarray(0,length));
+   }catch(e){audioBuffer=null;if(caption)caption.textContent="Trilha não pôde ser decodificada; exportando vídeo sem áudio...";}
+  }
+  output=new mb.Output({format:new mb.Mp4OutputFormat(),target:target});
+  const videoSource=new mb.CanvasSource(canvas,{codec:"avc",quality:new mb.Quality("high")});
+  output.addVideoTrack(videoSource,{frameRate:fps});
+  let audioSource=null;
+  if(audioBuffer){
+   try{audioSource=new mb.AudioBufferSource({codec:"aac",quality:new mb.Quality("high")});output.addAudioTrack(audioSource);}
+   catch(e){audioSource=null;}
+  }
+  await output.start();
+  if(audioSource){try{await audioSource.add(audioBuffer);audioSource.close();}catch(e){audioSource.close();}}
+  for(let frame=0;frame<total;frame++){
+   if(state.exportCancel)throw new Error("Exportação cancelada.");
+   const t=frame/fps,bmp=await requestFrame(t);
+   ctx.drawImage(bmp,0,0,size.width,size.height);bmp.close();
+   await videoSource.add(t,1/fps);
+   if(frame%Math.max(1,Math.floor(fps/2))===0){
+    const pct=Math.round((frame+1)/total*100);if(bar)bar.style.width=pct+"%";
+    if(caption)caption.textContent="Renderizando frame "+(frame+1)+" de "+total+" · "+pct+"%";
+    await new Promise(function(resolve){requestAnimationFrame(resolve);});
+   }
+  }
+  videoSource.close();if(caption)caption.textContent="Finalizando arquivo MP4...";
+  await output.finalize();
+  const blob=new Blob([target.buffer],{type:"video/mp4"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=(p.title||"what-if-video").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+".mp4";a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  toast("Vídeo MP4 exportado no dispositivo.","success");if(caption)caption.textContent="Concluído · "+bytes(blob.size);if(bar)bar.style.width="100%";
+ }catch(err){
+  toast(err.message||"Falha na exportação.","error");if(caption)caption.textContent=err.message||"Falha na exportação.";
+ }finally{
+  if(button)button.disabled=false;state.exportCancel=false;
+  if(audioContext){try{await audioContext.close();}catch(e){}}
+ }
+}
+function downloadFile(name,body,type){
+ const blob=new Blob([body],{type:type||"application/octet-stream"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(url);},30000);
+}
+function exportProject(){
+ const p=currentProject();if(!p)return;
+ downloadFile((p.title||"projeto").replace(/[^a-z0-9]+/gi,"-")+".json",JSON.stringify(p,null,2),"application/json");
+}
+function exportBackup(){
+ downloadFile("what-if-studio-backup.json",JSON.stringify({version:1,projects:state.projects},null,2),"application/json");
+}
+function clearProjects(){
+ if(!confirm("Apagar todos os projetos salvos neste navegador? Isso não pode ser desfeito. Exporte um backup antes."))return;
+ state.projects=[];persist();state.projectId=null;state.liveAssets=[];render();toast("Projetos locais apagados.","success");
+}
+function addScene(){
+ const p=currentProject();if(!p)return;
+ p.scenes.push({title:"Nova cena",description:"",duration:5});state.selectedScene=p.scenes.length-1;updateProject(p);render();
+}
+function addBranch(){
+ const p=currentProject();if(!p)return;p.branches.push({label:"Nova opção",consequence:""});updateProject(p);render();
+}
+function makeDemo(){
+ let p=state.projects.find(function(x){return x.id==="demo-what-if";});
+ if(!p){
+  p={id:"demo-what-if",title:"E se a Lua sumisse por 24 horas?",prompt:"Imagine que a Lua desaparece do céu por exatamente 24 horas. O que muda primeiro na Terra?",format:"What if?",platform:"Instagram Reels",duration:30,ratio:"9:16",tone:"Misterioso",
+  scenes:[{title:"O céu vazio",description:"Um plano do céu noturno sem a Lua, com a pergunta surgindo em texto.",duration:4},{title:"Primeiras mudanças",description:"Marés e animais noturnos reagem ao desaparecimento.",duration:8},{title:"A consequência",description:"A ausência lunar muda o ritmo natural, mas não destrói o planeta em um dia.",duration:10},{title:"A escolha",description:"A Lua volta ou continua desaparecida? A audiência escolhe o próximo capítulo.",duration:8}],
+  branches:[{label:"A Lua volta",consequence:"A próxima parte explora o que muda depois de um dia de ausência."},{label:"A Lua não volta",consequence:"A próxima parte explora as consequências de longo prazo."}],
+  poll:"Você traria a Lua de volta?",script:"00:00 — E se a Lua simplesmente desaparecesse por 24 horas?\n00:04 — A primeira mudança seria nas marés: a influência gravitacional da Lua deixaria de atuar como antes.\n00:12 — Animais que usam a luz lunar também encontrariam uma noite diferente.\n00:20 — Mas um dia sem Lua não faria a Terra explodir.\n00:26 — Você traria a Lua de volta ou deixaria o céu vazio?",code:DEMO_CODE,assets:[],createdAt:Date.now(),updatedAt:Date.now()};
+  state.projects.unshift(p);persist();
+ }
+ openProject(p.id);
+}
+function onFrameMessage(event){
+ const d=event.data||{},frame=document.getElementById("video-preview");
+ if(!frame||event.source!==frame.contentWindow||d.source!=="whatif-frame")return;
+ if(d.type==="ready"&&d.nonce===state.frameNonce){
+  state.previewReady=true;const status=document.getElementById("preview-status");if(status)status.textContent="PRÉVIA ATUALIZADA";
+ }
+ if(d.type==="error"){
+  const status=document.getElementById("preview-status");if(status)status.textContent="ERRO NO CÓDIGO";toast("Erro na prévia: "+d.message,"error");
+ }
+ if(d.type==="asset-error")toast("Asset não carregado: "+d.name,"error");
+ if(d.type==="tick"){
+  const range=document.getElementById("seek-range"),readout=document.getElementById("time-readout");
+  if(range)range.value=d.time;if(readout)readout.textContent=timecode(d.time)+" / "+timecode(d.duration);
+  if(d.time>=d.duration){state.playing=false;const b=document.querySelector('[data-act="toggle-preview"]');if(b)b.innerHTML=ic("play");}
+ }
+ if(d.type==="frame"&&state.frameWaiters.has(d.requestId)){
+  state.frameWaiters.get(d.requestId)(d);state.frameWaiters.delete(d.requestId);
+ }
+}
