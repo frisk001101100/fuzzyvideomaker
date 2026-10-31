@@ -58,7 +58,7 @@ function extractGemini(data) {
 
 async function providerRequest(input) {
   const controller = new AbortController();
-  const timeout = setTimeout(function () { controller.abort(); }, 150_000);
+  const timeout = setTimeout(function () { controller.abort(); }, 50_000);
   try {
     let url, headers = { "Content-Type": "application/json" }, body, parse;
     if (input.provider === "openai") {
