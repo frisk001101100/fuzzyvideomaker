@@ -438,3 +438,70 @@ function onFrameMessage(event){
   state.frameWaiters.get(d.requestId)(d);state.frameWaiters.delete(d.requestId);
  }
 }
+
+root.addEventListener("click",async function(event){
+ const button=event.target.closest("[data-act]");if(!button)return;
+ const act=button.dataset.act;
+ if(act==="navigate"){if(state.page==="studio")readEditorIntoProject();state.page=button.dataset.page;render();}
+ if(act==="new-project")openModal();
+ if(act==="close-modal")closeModal();
+ if(act==="open-project")openProject(button.dataset.id);
+ if(act==="open-demo")makeDemo();
+ if(act==="toggle-preview")togglePreview();
+ if(act==="refresh-preview"){readEditorIntoProject();await refreshPreview(false);toast("Atualizando prévia...","success");}
+ if(act==="demo-code"){readEditorIntoProject();loadDemoCode();}
+ if(act==="set-tab"){readEditorIntoProject();state.activeTab=button.dataset.tab;render();}
+ if(act==="select-scene"){readEditorIntoProject();state.selectedScene=Number(button.dataset.index)||0;render();}
+ if(act==="add-scene"){readEditorIntoProject();addScene();}
+ if(act==="add-branch"){readEditorIntoProject();addBranch();}
+ if(act==="remove-asset")removeAsset(button.dataset.id);
+ if(act==="generate-story"){readEditorIntoProject();await callAI("story");}
+ if(act==="generate-code"){readEditorIntoProject();await callAI("code");}
+ if(act==="score-hook"){readEditorIntoProject();scoreHook();}
+ if(act==="save-provider")saveProvider();
+ if(act==="clear-key")clearKey();
+ if(act==="export-video")exportVideo();
+ if(act==="cancel-export")state.exportCancel=true;
+ if(act==="export-backup")exportBackup();
+ if(act==="export-project-json"){readEditorIntoProject();exportProject();}
+ if(act==="clear-projects")clearProjects();
+ if(act==="toggle-mobile-nav"){state.page="dashboard";render();toast("Navegação disponível pelos atalhos inferiores.");}
+});
+root.addEventListener("submit",function(event){
+ if(event.target.id!=="new-project-form")return;
+ event.preventDefault();const data=Object.fromEntries(new FormData(event.target).entries());
+ if(!data.title||!data.prompt)return;closeModal();createProject(data);
+});
+root.addEventListener("input",function(event){
+ const el=event.target;
+ if(el.id==="script-input"||el.id==="code-input"||el.id==="premise-input"||el.id==="scene-description"||el.id==="scene-duration"||el.id==="poll-input"||el.dataset.branch)readEditorIntoProject();
+});
+root.addEventListener("change",async function(event){
+ const el=event.target;
+ if(el.id==="asset-input")await importFiles(el.files);
+ if(el.id==="provider-select"||el.id==="studio-provider")state.provider=el.value;
+ if(el.id==="model-input"||el.id==="studio-model")state.model=el.value.trim();
+ if(el.id==="key-input"||el.id==="studio-key")state.providerKey=el.value.trim();
+ if(el.id==="duration-input"||el.id==="ratio-input"||el.id==="fps-input"){
+  const p=currentProject();if(p){syncProjectInputs();if(el.id!=="fps-input")refreshPreview(true);}
+ }
+});
+root.addEventListener("input",function(event){
+ if(event.target.id==="seek-range")postToFrame({type:"seek",nonce:state.frameNonce,time:Number(event.target.value)});
+});
+root.addEventListener("dragover",function(event){
+ const drop=event.target.closest("#asset-drop");if(drop){event.preventDefault();drop.classList.add("dragover");}
+});
+root.addEventListener("dragleave",function(event){
+ const drop=event.target.closest("#asset-drop");if(drop)drop.classList.remove("dragover");
+});
+root.addEventListener("drop",async function(event){
+ const drop=event.target.closest("#asset-drop");if(!drop)return;
+ event.preventDefault();drop.classList.remove("dragover");await importFiles(event.dataTransfer.files);
+});
+window.addEventListener("message",onFrameMessage);
+window.addEventListener("beforeunload",function(){state.providerKey="";});
+(async function boot(){
+ try{state.db=await openDb();}catch(e){state.db=null;}
+ render();
+})();
