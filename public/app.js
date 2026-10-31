@@ -198,25 +198,24 @@ async function removeAsset(id){
 function frameDocument(){
  const script=[
  "(function(){",
- "const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});let W=720,H=1280,D=30,renderFn=null,assets={},playing=false,start=0,current=0,raf=0,nonce='';",
+ "const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});let W=720,H=1280,D=30,renderFn=null,assets={},playing=false,start=0,current=0,raf=0,nonce='',activeRequestId=null;",
  "function send(type,extra){parent.postMessage(Object.assign({source:'whatif-frame',type:type,nonce:nonce},extra||{}),'*');}",
- "function fail(err){send('error',{message:String(err&&err.message||err).slice(0,700)});}",
+ "function fail(err){send('error',{message:String(err&&err.message||err).slice(0,700),requestId:activeRequestId});}",
  "async function loadAsset(a){const file=a.file,url=URL.createObjectURL(file),item={id:a.id,name:a.name,kind:a.kind,url:url,file:file,element:null,family:null};",
  "if(a.kind==='image'){const el=new Image();el.src=url;await el.decode();item.element=el;}",
  "else if(a.kind==='video'||a.kind==='audio'){const el=document.createElement(a.kind);el.src=url;el.preload='auto';el.muted=true;el.playsInline=true;await new Promise(ok=>{if(el.readyState>=1)ok();else{el.onloadedmetadata=ok;el.onerror=ok;setTimeout(ok,4000);}});item.element=el;}",
  "else if(a.kind==='font'){const family='UserFont_'+a.id.replace(/[^a-z0-9]/gi,'');const face=new FontFace(family,'url('+url+')');await face.load();document.fonts.add(face);item.family=family;item.element=face;}",
  "assets[a.id]=item;}",
- "function draw(t){current=Math.max(0,Math.min(D,Number(t)||0));for(const id in assets){const a=assets[id];if(a.kind==='video'&&a.element&&Number.isFinite(a.element.duration)){const target=Math.min(current,Math.max(0,a.element.duration-.05));if(Math.abs(a.element.currentTime-target)>.15){try{a.element.currentTime=target;}catch(e){}}}}",
- "if(!renderFn)throw new Error('Código ainda não carregado.');ctx.clearRect(0,0,W,H);renderFn({ctx:ctx,time:current,duration:D,width:W,height:H,assets:assets,canvas:canvas});}",
- "function loop(now){if(!playing)return;current=(now-start)/1000;if(current>=D){current=D;playing=false;}try{draw(current);send('tick',{time:current,duration:D});}catch(e){playing=false;fail(e);}if(playing)raf=requestAnimationFrame(loop);else send('paused',{time:current});}",
+ "async function draw(t){current=Math.max(0,Math.min(D,Number(t)||0));for(const id in assets){const a=assets[id];if(a.kind==='video'&&a.element&&Number.isFinite(a.element.duration)){const target=Math.min(current,Math.max(0,a.element.duration-.05));if(Math.abs(a.element.currentTime-target)>.04){await new Promise(resolve=>{let finished=false;const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);a.element.removeEventListener('seeked',finish);a.element.removeEventListener('error',finish);resolve();};const timer=setTimeout(finish,2500);a.element.addEventListener('seeked',finish,{once:true});a.element.addEventListener('error',finish,{once:true});try{a.element.currentTime=target;}catch(e){finish();}});}}}if(!renderFn)throw new Error('Código ainda não carregado.');ctx.clearRect(0,0,W,H);renderFn({ctx:ctx,time:current,duration:D,width:W,height:H,assets:assets,canvas:canvas});}",
+ "async function loop(now){if(!playing)return;current=(now-start)/1000;if(current>=D){current=D;playing=false;}try{await draw(current);send('tick',{time:current,duration:D});}catch(e){playing=false;fail(e);}if(playing)raf=requestAnimationFrame(loop);else send('paused',{time:current});}",
  "async function init(m){nonce=m.nonce;W=m.width||720;H=m.height||1280;D=m.duration||30;canvas.width=W;canvas.height=H;assets={};",
  "for(const a of (m.assets||[])){try{await loadAsset(a);}catch(e){send('asset-error',{name:a.name,message:String(e.message||e)});}}",
  "try{renderFn=new Function(m.code+'; return (typeof renderFrame === \"function\") ? renderFrame : null;')();if(!renderFn)throw new Error('Defina function renderFrame({ctx,time,duration,width,height,assets}).');draw(0);send('ready',{width:W,height:H});}catch(e){fail(e);}}",
  "window.addEventListener('message',async ev=>{const m=ev.data||{};if(m.source!=='whatif-parent')return;if(m.type==='init'){init(m);return;}if(m.nonce!==nonce)return;",
  "if(m.type==='play'&&!playing){playing=true;start=performance.now()-current*1000;raf=requestAnimationFrame(loop);}",
  "if(m.type==='pause'){playing=false;cancelAnimationFrame(raf);send('paused',{time:current});}",
- "if(m.type==='seek'){playing=false;cancelAnimationFrame(raf);try{draw(m.time);send('tick',{time:current,duration:D});}catch(e){fail(e);}}",
- "if(m.type==='frame'){playing=false;cancelAnimationFrame(raf);try{draw(m.time);const bmp=await createImageBitmap(canvas);parent.postMessage({source:'whatif-frame',type:'frame',nonce:nonce,requestId:m.requestId,bitmap:bmp},'*',[bmp]);}catch(e){fail(e);}}",
+ "if(m.type==='seek'){playing=false;cancelAnimationFrame(raf);try{await draw(m.time);send('tick',{time:current,duration:D});}catch(e){fail(e);}}",
+ "if(m.type==='frame'){playing=false;cancelAnimationFrame(raf);activeRequestId=m.requestId;try{await draw(m.time);const bmp=await createImageBitmap(canvas);parent.postMessage({source:'whatif-frame',type:'frame',nonce:nonce,requestId:m.requestId,bitmap:bmp},'*',[bmp]);}catch(e){fail(e);}finally{activeRequestId=null;}}",
  "});send('boot');})();"
  ].join("\n");
  return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'; style-src \'unsafe-inline\'; img-src blob: data:; media-src blob: data:; font-src blob: data:; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080a10}canvas{width:100%;height:100%;display:block;object-fit:contain}</style></head><body><canvas id="c"></canvas><script>'+script+'<\/script></body></html>';
@@ -452,6 +451,7 @@ function onFrameMessage(event){
  }
  if(d.type==="error"){
   const status=document.getElementById("preview-status");if(status)status.textContent="ERRO NO CÓDIGO";toast("Erro na prévia: "+d.message,"error");
+  if(d.requestId&&state.frameWaiters.has(d.requestId)){const rejectFrame=state.frameWaiters.get(d.requestId);state.frameWaiters.delete(d.requestId);rejectFrame({error:d.message||"Falha ao renderizar frame."});}
  }
  if(d.type==="asset-error")toast("Asset não carregado: "+d.name,"error");
  if(d.type==="tick"){
