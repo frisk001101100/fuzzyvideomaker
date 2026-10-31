@@ -292,15 +292,20 @@ function clearKey(){
 }
 async function callAI(mode){
  const p=currentProject();if(!p)return;readEditorIntoProject();
+ if(mode==="next"&&(!Number.isInteger(p.selectedBranch)||!p.branches[p.selectedBranch])){toast("Escolha uma opção da enquete antes de gerar a continuação.","error");return;}
  if(!state.providerKey){state.page="settings";render();toast("Configure uma chave de API para gerar conteúdo.","error");return;}
  if(!state.model.trim()){toast("Informe o identificador de modelo do provedor.","error");return;}
  const status=document.getElementById("ai-status");if(status)status.textContent="Enviando solicitação ao modelo...";
  const assets=(p.assets||[]).map(function(a){return "ID "+a.id+" | "+a.name+" | "+a.kind;}).join("\n");
  const scenes=p.scenes.map(function(s,i){return (i+1)+". "+s.title+" — "+s.description+" ("+s.duration+"s)";}).join("\n");
  let instructions="",prompt="";
- if(mode==="story"){
+ if(mode==="next"){
+  const chosen=p.branches[p.selectedBranch];
+  instructions="Você é roteirista de uma série curta ramificada. Continue a história em português brasileiro, respeitando todos os fatos e decisões anteriores. A escolha do público é obrigatória e deve alterar de verdade a situação, não apenas ser mencionada. Crie um episódio completo com gancho, progressão, consequência da escolha, cliffhanger e nova pergunta com duas opções distintas. Retorne roteiro organizado por timecodes, narração, visual e som. Sem conteúdo sexual explícito, violência gráfica ou autolesão.";
+  prompt="PROJETO: "+p.title+"\nEPISÓDIO ANTERIOR: "+Number(p.episodeNumber||1)+"\nIDEIA ORIGINAL: "+p.prompt+"\nROTEIRO ANTERIOR:\n"+p.script+"\nESCOLHA VENCEDORA: "+chosen.label+"\nCONSEQUÊNCIA OBRIGATÓRIA: "+chosen.consequence+"\nCONTINUIDADE DO UNIVERSO:\n"+(p.continuity||"")+"\nDURAÇÃO DO NOVO EPISÓDIO: "+p.duration+" segundos\nCENAS PLANEJADAS:\n"+scenes+"\n\nEscreva o episódio seguinte como consequência direta da escolha. Termine com uma nova enquete e duas opções que abram caminhos realmente diferentes.";
+ }else if(mode==="story"){
   instructions="Você é roteirista e diretor criativo de vídeos curtos verticais. Escreva em português brasileiro natural, com ritmo oral, imagens concretas, cortes frequentes e causalidade clara. Não prometa viralização. Sem conteúdo sexual explícito, violência gráfica ou autolesão. Retorne somente roteiro organizado por timecodes, narração, visual e som. Termine com pergunta clara e opções de enquete com consequências narrativas distintas.";
-  prompt="PROJETO: "+p.title+"\nFORMATO: "+p.format+"\nPLATAFORMA: "+p.platform+"\nDURAÇÃO: "+p.duration+" segundos\nTOM: "+p.tone+"\nIDEIA: "+p.prompt+"\nCENAS PLANEJADAS:\n"+scenes+"\nRAMIFICAÇÕES:\n"+p.branches.map(function(b){return b.label+": "+b.consequence;}).join("\n")+"\nASSETS DISPONÍVEIS: "+assets+"\n\nCrie um roteiro completo para a duração indicada, com gancho imediato, batidas cronometradas e cliffhanger.";
+  prompt="PROJETO: "+p.title+"\nFORMATO: "+p.format+"\nPLATAFORMA: "+p.platform+"\nDURAÇÃO: "+p.duration+" segundos\nTOM: "+p.tone+"\nIDEIA: "+p.prompt+"\nCONTINUIDADE:\n"+(p.continuity||"")+"\nCENAS PLANEJADAS:\n"+scenes+"\nRAMIFICAÇÕES:\n"+p.branches.map(function(b){return b.label+": "+b.consequence;}).join("\n")+"\nASSETS DISPONÍVEIS: "+assets+"\n\nCrie um roteiro completo para a duração indicada, com gancho imediato, batidas cronometradas e cliffhanger.";
  }else{
   instructions="Você é um engenheiro criativo de motion design. Gere JavaScript puro executável no Canvas 2D. Retorne APENAS código JavaScript, sem Markdown. Defina exatamente function renderFrame({ ctx, time, duration, width, height, assets }). A função desenha o frame inteiro com determinismo temporal. Use ctx, gradients, formas, tipografia e transições suaves. Não use fetch, rede, imports, DOM, módulos, timers, APIs de sistema ou dependências externas. Use assets pelo ID exato listado no prompt: assets["ID"].element. Para imagens e vídeos, desenhe o elemento com ctx.drawImage; para fontes, use assets["ID"].family em ctx.font. Cada item tem kind, element, name e, para fontes, family. Desenhe com fallback se assets estiver vazio. Evite loops infinitos e operações caras. Faça layout legível em 9:16 e mantenha textos dentro da área segura. Não gere vídeo por IA.";
   prompt="Crie código de animação para o projeto "+p.title+".\nIdeia: "+p.prompt+"\nRoteiro: "+p.script+"\nCenas:\n"+scenes+"\nDuração: "+p.duration+"s\nProporção: "+p.ratio+"\nAssets: "+assets+"\n\nQuero motion graphics original, composição pensada, ritmo visual e gancho forte. Canvas width e height são dinâmicos. Desenhe tudo a partir de time.";
@@ -310,8 +315,17 @@ async function callAI(mode){
   const data=await response.json().catch(function(){return {};});
   if(!response.ok)throw new Error(data.error||"O provedor recusou a solicitação.");
   if(!data.text)throw new Error("O modelo retornou uma resposta vazia.");
-  if(mode==="story"){p.script=data.text;state.activeTab="story";}
-  else{let code=data.text.trim();if(code.charCodeAt(0)===96){code=code.split("\n").slice(1,-1).join("\n");}p.code=code;state.activeTab="code";}
+  if(mode==="story"||mode==="next"){
+   if(mode==="next"){
+    const chosen=p.branches[p.selectedBranch];p.episodes=p.episodes||[];
+    p.episodes.push({number:Number(p.episodeNumber||1),script:p.script,selectedBranch:{label:chosen.label,consequence:chosen.consequence},poll:p.poll,recordedAt:Date.now()});
+    p.continuity=((p.continuity||"")+"\nDecisão no episódio "+Number(p.episodeNumber||1)+": "+chosen.label+". Consequência: "+chosen.consequence).trim();
+    p.episodeNumber=Number(p.episodeNumber||1)+1;p.selectedBranch=null;
+    p.poll="Qual caminho deve acontecer na próxima parte?";
+    p.branches=[{label:"Caminho A",consequence:"Defina a consequência deste caminho."},{label:"Caminho B",consequence:"Defina uma consequência diferente."}];
+   }
+   p.script=data.text;state.activeTab="story";
+  }else{let code=data.text.trim();if(code.charCodeAt(0)===96){code=code.split("\n").slice(1,-1).join("\n");}p.code=code;state.activeTab="code";}
   updateProject(p);render();if(mode==="code")refreshPreview(false);
   toast(mode==="story"?"Roteiro gerado.":"Código visual gerado. Confira a prévia.","success");
  }catch(err){
@@ -463,6 +477,8 @@ root.addEventListener("click",async function(event){
  if(act==="demo-code"){readEditorIntoProject();loadDemoCode();}
  if(act==="set-tab"){readEditorIntoProject();state.activeTab=button.dataset.tab;render();}
  if(act==="select-scene"){readEditorIntoProject();state.selectedScene=Number(button.dataset.index)||0;render();}
+ if(act==="select-branch"){readEditorIntoProject();const p=currentProject();if(p){p.selectedBranch=Number(button.dataset.index);updateProject(p);render();}}
+ if(act==="generate-next"){readEditorIntoProject();await callAI("next");}
  if(act==="add-scene"){readEditorIntoProject();addScene();}
  if(act==="add-branch"){readEditorIntoProject();addBranch();}
  if(act==="remove-asset")removeAsset(button.dataset.id);
