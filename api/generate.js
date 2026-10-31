@@ -140,6 +140,9 @@ export default async function handler(req, res) {
     return send(res, 405, { error: "Método não permitido." });
   }
   if (!allowedOrigin(req)) return send(res, 403, { error: "Origem não autorizada." });
+  if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
+    return send(res, 415, { error: "Envie a solicitação como application/json." });
+  }
 
   const size = Number(req.headers["content-length"] || 0);
   if (size > MAX_BODY_BYTES) return send(res, 413, { error: "Solicitação muito grande. Reduza o tamanho do roteiro ou das instruções." });
@@ -150,6 +153,8 @@ export default async function handler(req, res) {
   } catch {
     return send(res, 400, { error: "JSON inválido." });
   }
+
+  if (Buffer.byteLength(JSON.stringify(input), "utf8") > MAX_BODY_BYTES) return send(res, 413, { error: "Solicitação muito grande. Reduza o tamanho do roteiro ou das instruções." });
 
   const provider = String(input.provider || "");
   const model = String(input.model || "").trim();
