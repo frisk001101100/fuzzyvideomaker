@@ -16,7 +16,7 @@ A browser-first video studio for branching short-form stories, Reels, Shorts, ex
 
 ## Run
 
-Requirements: Node.js 20+.
+Requirements: Node.js 24+.
 
 \`\`\`bash
 npm install
