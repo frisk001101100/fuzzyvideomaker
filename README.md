@@ -20,6 +20,8 @@ Requirements: Node.js 20+.
 
 \`\`\`bash
 npm install
+npm test
+npm run check
 npx vercel dev
 \`\`\`
 
