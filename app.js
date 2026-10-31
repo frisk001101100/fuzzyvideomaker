@@ -92,3 +92,103 @@ function settingsPage(){
  '<div class="feature"><div class="feature-icon">'+ic("check")+'</div><div><strong>Publicação manual</strong><p>O app prepara materiais; não publica, não lê enquetes e não raspa dados de redes sociais.</p></div></div></div></section></div>'+
  '<div class="section-head"><div><h2>Dados locais</h2><p>Você controla os projetos neste navegador.</p></div></div><section class="glass panel"><div class="panel-title"><h3>Backup do workspace</h3><span>'+state.projects.length+' PROJETOS</span></div><p style="font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 16px">Baixe os metadados e roteiros em JSON. Os arquivos de mídia não entram no backup nesta versão.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" data-act="export-backup">'+ic("download")+' Exportar backup JSON</button><button class="btn btn-danger" data-act="clear-projects">'+ic("trash")+' Apagar projetos locais</button></div></section></div></main>';
 }
+
+function sceneList(p){
+ const items=p.scenes.map(function(s,i){return '<button class="scene-item '+(i===state.selectedScene?"active":"")+'" data-act="select-scene" data-index="'+i+'"><span class="scene-index">'+String(i+1).padStart(2,"0")+'</span><span><span class="scene-name">'+esc(s.title)+'</span><span class="scene-time">'+Number(s.duration||0)+' SEC</span></span></button>';}).join("");
+ return '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Storyboard</h3><span>'+p.scenes.length+' CENAS</span></div><div class="scene-list">'+items+'</div><button class="scene-add" data-act="add-scene">+ Adicionar cena</button></div>';
+}
+function assetPanel(p){
+ const items=state.liveAssets.map(function(a){
+  const ico=a.kind==="image"?"image":a.kind==="audio"?"music":a.kind==="font"?"type":"film";
+  return '<div class="asset-row"><div class="asset-type">'+ic(ico)+'</div><div class="asset-copy"><strong>'+esc(a.name)+'</strong><span>'+bytes(a.size||0)+'</span></div><button class="asset-remove" data-act="remove-asset" data-id="'+a.id+'" title="Remover">×</button></div>';
+ }).join("");
+ return '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Biblioteca de mídia</h3><span>'+state.liveAssets.length+' ARQUIVOS</span></div><label class="asset-drop" id="asset-drop"><input id="asset-input" type="file" multiple accept="image/*,video/*,audio/*,.ttf,.otf,.woff,.woff2" hidden><span>'+ic("upload")+'</span><strong>Importar assets</strong><span>Imagens, vídeos, áudio e fontes<br>O conteúdo fica neste navegador</span></label><div class="asset-list">'+(items||'<div class="field-note">Nenhum asset importado.</div>')+'</div><div class="notice" style="margin-top:12px">Fontes importadas podem ser usadas no código de renderização. Evite arquivos enormes para manter a prévia fluida.</div></div>';
+}
+function storyTab(p){
+ const s=p.scenes[state.selectedScene]||p.scenes[0];
+ const branches=(p.branches||[]).map(function(b,i){
+  return '<div class="branch-card"><strong><i class="branch-dot"></i> Opção '+(i+1)+'</strong><div class="field" style="margin:8px 0 0"><input data-branch="'+i+'" data-prop="label" value="'+esc(b.label)+'" placeholder="Texto da escolha"></div><div class="field" style="margin:7px 0 0"><textarea data-branch="'+i+'" data-prop="consequence" style="min-height:54px" placeholder="O que muda se esta opção vencer?">'+esc(b.consequence)+'</textarea></div></div>';
+ }).join("");
+ return '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Narrativa</h3><span>STORY ENGINE</span></div><div class="field"><label>Premissa</label><textarea id="premise-input" style="min-height:100px">'+esc(p.prompt)+'</textarea></div><div class="field"><label>Roteiro / narração</label><textarea id="script-input" class="script-area" placeholder="Escreva ou gere o roteiro do vídeo...">'+esc(p.script||"")+'</textarea></div><div class="field"><label>Cena selecionada · '+esc(s?s.title:"")+'</label><textarea id="scene-description" style="min-height:74px" placeholder="O que acontece visualmente nesta cena?">'+esc(s?s.description:"")+'</textarea></div><div class="form-grid"><div class="field"><label>Segundos da cena</label><input id="scene-duration" type="number" min="1" max="180" value="'+Number(s?s.duration:5)+'"></div><div class="field"><label>Tom</label><select id="tone-input"><option '+(p.tone==="Cinematográfico"?"selected":"")+'>Cinematográfico</option><option '+(p.tone==="Urgente"?"selected":"")+'>Urgente</option><option '+(p.tone==="Misterioso"?"selected":"")+'>Misterioso</option><option '+(p.tone==="Documental"?"selected":"")+'>Documental</option></select></div></div><div class="editor-panel-head" style="margin-top:18px"><h3>Enquete / ramificações</h3><span>'+(p.branches||[]).length+' OPÇÕES</span></div><div class="field"><label>Pergunta para o público</label><input id="poll-input" value="'+esc(p.poll||"")+'" placeholder="Qual caminho deve acontecer?"></div>'+branches+'<button class="scene-add" data-act="add-branch">+ Adicionar opção</button><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:13px"><button class="btn btn-primary btn-small" data-act="generate-story">'+ic("spark")+' Gerar roteiro com IA</button><button class="btn btn-small" data-act="score-hook">Analisar gancho</button></div><div id="hook-score"></div></div>';
+}
+function codeTab(p){
+ return '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Código de animação</h3><span>JAVASCRIPT / CANVAS</span></div><div class="notice" style="margin-bottom:12px">O modelo deve retornar <strong>function renderFrame({ ctx, time, duration, width, height, assets })</strong>. O código roda em iframe sandbox sem acesso à rede.</div><textarea id="code-input" class="code-area" spellcheck="false">'+esc(p.code||DEMO_CODE)+'</textarea><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px"><button class="btn btn-primary btn-small" data-act="refresh-preview">'+ic("check")+' Aplicar no preview</button><button class="btn btn-small" data-act="generate-code">'+ic("wand")+' Gerar código com IA</button><button class="btn btn-small" data-act="demo-code">Carregar exemplo</button></div><p class="field-note" style="margin-top:10px">O sandbox limita o acesso do script à página, mas não impede consumo excessivo de CPU. Revise o código antes de exportar.</p></div>';
+}
+function aiTab(p){
+ return '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Modelos e geração</h3><span>TEXT-TO-CODE</span></div><div class="field"><label>Provedor</label><select id="studio-provider"><option value="openai" '+(state.provider==="openai"?"selected":"")+' >OpenAI</option><option value="anthropic" '+(state.provider==="anthropic"?"selected":"")+' >Claude / Anthropic</option><option value="gemini" '+(state.provider==="gemini"?"selected":"")+' >Gemini</option></select></div><div class="field"><label>Modelo</label><input id="studio-model" value="'+esc(state.model)+'" placeholder="ID de modelo da sua conta"></div><div class="field"><label>Chave de API desta aba</label><input id="studio-key" type="password" autocomplete="off" placeholder="'+(state.providerKey?"Chave carregada nesta aba":"Cole sua chave de API")+'"></div><div class="notice">A chave nunca é salva. Você precisa ter acesso à API e pode haver cobrança separada do plano de chat.</div><div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-primary btn-small" data-act="save-provider">Aplicar modelo</button><button class="btn btn-small" data-act="clear-key">Limpar chave</button></div><div class="editor-panel-head" style="margin-top:22px"><h3>Fluxo de geração</h3><span>2 PROMPTS</span></div><div class="feature-stack"><div class="feature"><div class="feature-icon">'+ic("spark")+'</div><div><strong>1 · Roteiro</strong><p>Gancho, progressão, narração, cliffhanger e alternativas.</p><button class="btn btn-small" data-act="generate-story" style="margin-top:8px">Gerar narrativa</button></div></div><div class="feature"><div class="feature-icon">'+ic("code")+'</div><div><strong>2 · Código de vídeo</strong><p>JavaScript para desenhar cada frame usando seus assets locais.</p><button class="btn btn-small" data-act="generate-code" style="margin-top:8px">Gerar código visual</button></div></div></div><div id="ai-status" class="field-note" style="margin-top:12px">A IA gera código; a codificação do vídeo acontece no seu dispositivo.</div></div>';
+}
+function rightEditor(p){
+ const tabs=[["story","Narrativa"],["code","Código"],["ai","IA"]];
+ return '<aside class="editor-right"><div class="glass editor-panel"><div class="editor-tabs">'+tabs.map(function(t){return '<button class="editor-tab '+(state.activeTab===t[0]?"active":"")+'" data-act="set-tab" data-tab="'+t[0]+'">'+t[1]+'</button>';}).join("")+'</div>'+(state.activeTab==="story"?storyTab(p):state.activeTab==="code"?codeTab(p):aiTab(p))+'</div>'+
+ '<div class="glass editor-panel"><div class="editor-panel-head"><h3>Formato de saída</h3><span>EXPORT SETUP</span></div><div class="form-grid"><div class="field"><label>Duração · s</label><input id="duration-input" type="number" min="5" max="600" value="'+Number(p.duration||30)+'"></div><div class="field"><label>Proporção</label><select id="ratio-input"><option value="9:16" '+(p.ratio==="9:16"?"selected":"")+'>9:16</option><option value="1:1" '+(p.ratio==="1:1"?"selected":"")+'>1:1</option><option value="16:9" '+(p.ratio==="16:9"?"selected":"")+'>16:9</option></select></div></div><div class="field"><label>FPS</label><select id="fps-input"><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option></select></div><button class="btn btn-primary btn-full" data-act="export-video" id="export-btn">'+ic("download")+' Exportar vídeo</button><div id="export-progress" class="progress-wrap"><div class="progress-bar"><span id="export-progress-bar"></span></div><div id="export-progress-caption" class="progress-caption">Preparando renderização...</div><button class="btn btn-danger btn-small" data-act="cancel-export" style="margin-top:8px">Cancelar renderização</button></div><p class="field-note" style="margin-top:10px">A exportação é local. Arquivos longos exigem memória e bateria; escolha resolução e FPS adequados ao aparelho.</p></div></aside>';
+}
+function studioPage(){
+ const p=currentProject();
+ if(!p)return '<main class="main"><div class="page"><div class="empty-state"><h3>Nenhum projeto aberto</h3><p>Crie ou selecione um projeto para continuar.</p><button class="btn btn-primary" data-act="navigate" data-page="dashboard">Voltar ao início</button></div></div></main>';
+ return '<main class="main"><div class="page"><div class="workspace-head"><div class="workspace-title"><div class="eyebrow">PROJECT WORKSPACE</div><h1>'+esc(p.title)+'</h1><p>'+esc(p.format)+' · '+esc(p.platform)+' · Atualizado '+dateLabel(p.updatedAt)+'</p></div><div class="top-actions"><button class="btn btn-small" data-act="export-project-json">'+ic("download")+' Exportar projeto</button><button class="btn btn-small" data-act="navigate" data-page="dashboard">Fechar editor</button></div></div><div class="editor-layout"><div class="editor-left">'+sceneList(p)+assetPanel(p)+'</div>'+
+ '<section class="center-stage"><div class="glass preview-card"><div class="preview-head"><strong>Prévia vertical</strong><span id="preview-status">AGUARDANDO CÓDIGO</span></div><div class="preview-area"><div class="preview-frame"><iframe id="video-preview" sandbox="allow-scripts" title="Prévia do vídeo"></iframe></div></div><div class="preview-controls"><button class="control-play" data-act="toggle-preview" aria-label="Reproduzir">'+ic("play")+'</button><div class="range-wrap"><input type="range" id="seek-range" min="0" max="'+Number(p.duration||30)+'" step="0.1" value="0"></div><span class="time-readout" id="time-readout">00:00 / '+timecode(p.duration||30)+'</span></div><div class="stage-actions"><div class="stage-actions-left"><button class="btn btn-small" data-act="refresh-preview">'+ic("check")+' Atualizar prévia</button><button class="btn btn-small" data-act="demo-code">Exemplo visual</button></div><div class="stage-actions-right"><button class="btn btn-small" data-act="navigate" data-page="settings">Chave de IA</button></div></div></div><div class="glass timeline"><div class="timeline-head"><strong>Linha do tempo</strong><span class="section-label">'+p.scenes.length+' CLIPES</span></div><div class="timeline-track">'+p.scenes.map(function(){return '<div class="timeline-segment"></div>';}).join("")+'</div><div class="timeline-meta"><span>00:00</span><span>'+timecode(p.duration||30)+'</span></div></div></section>'+
+ rightEditor(p)+'</div></div></main>';
+}
+function render(){
+ root.innerHTML='<div class="shell">'+sidebar()+topbar()+(state.page==="studio"?studioPage():state.page==="settings"?settingsPage():dashboardPage())+bottomNav()+modal()+'<div class="toast-stack" id="toast-stack"></div></div>';
+ if(state.page==="studio"&&currentProject())refreshPreview(true);
+}
+function openModal(){const m=document.getElementById("project-modal");if(m)m.classList.add("open");}
+function closeModal(){const m=document.getElementById("project-modal");if(m)m.classList.remove("open");}
+function createProject(data){
+ const p={id:uid(),title:data.title,prompt:data.prompt,format:data.format,platform:data.platform,duration:Math.max(5,Math.min(600,Number(data.duration)||30)),ratio:data.ratio||"9:16",tone:"Cinematográfico",
+ scenes:[{title:"Gancho",description:"Abra com a premissa visual mais forte.",duration:4},{title:"O que muda",description:"Mostre a primeira consequência concreta.",duration:8},{title:"Escalada",description:"Aumente as implicações e apresente um detalhe inesperado.",duration:10},{title:"Escolha",description:"Termine com uma decisão clara para a audiência.",duration:8}],
+ branches:[{label:"Opção A",consequence:"A história segue pelo caminho A."},{label:"Opção B",consequence:"A história segue pelo caminho B."}],poll:"Qual caminho deve acontecer depois?",script:"",code:DEMO_CODE,assets:[],createdAt:Date.now(),updatedAt:Date.now()};
+ state.projects.unshift(p);persist();state.projectId=p.id;state.page="studio";state.selectedScene=0;state.activeTab="story";render();toast("Projeto criado e salvo neste navegador.","success");
+}
+function openProject(id){
+ const p=state.projects.find(function(x){return x.id===id;});if(!p)return;
+ state.projectId=id;state.page="studio";state.selectedScene=0;state.activeTab="story";
+ hydrateProjectAssets(p).then(function(){render();});
+}
+function updateProject(p){p.updatedAt=Date.now();persist();}
+function openDb(){
+ if(!("indexedDB" in window))return Promise.resolve(null);
+ return new Promise(function(resolve,reject){
+  const req=indexedDB.open("what-if-studio-media",1);
+  req.onupgradeneeded=function(){const db=req.result;if(!db.objectStoreNames.contains("assets"))db.createObjectStore("assets",{keyPath:"id"});};
+  req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};
+ });
+}
+function dbRequest(mode,action){
+ return new Promise(function(resolve,reject){
+  if(!state.db){reject(new Error("IndexedDB indisponível."));return;}
+  const tx=state.db.transaction("assets",mode);const req=action(tx.objectStore("assets"));
+  req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};
+ });
+}
+function saveAssetFile(id,file){return dbRequest("readwrite",function(store){return store.put({id:id,file:file});});}
+function getAssetFile(id){return dbRequest("readonly",function(store){return store.get(id);}).then(function(row){return row?row.file:null;});}
+function deleteAssetFile(id){return dbRequest("readwrite",function(store){return store.delete(id);});}
+async function hydrateProjectAssets(p){
+ state.liveAssets=[];
+ for(const asset of p.assets||[]){try{const file=await getAssetFile(asset.id);if(file)state.liveAssets.push(Object.assign({},asset,{file:file}));}catch(e){}}
+}
+function kindFor(file){
+ if(file.type.startsWith("image/"))return "image";
+ if(file.type.startsWith("video/"))return "video";
+ if(file.type.startsWith("audio/"))return "audio";
+ if(/\.(ttf|otf|woff|woff2)$/i.test(file.name))return "font";
+ return "other";
+}
+async function importFiles(files){
+ const p=currentProject();if(!p)return;
+ const list=Array.from(files||[]);if(!list.length)return;let added=0;
+ for(const file of list){
+  if(file.size>300*1024*1024){toast("Arquivo muito grande (limite local de 300 MB): "+file.name,"error");continue;}
+  const id=uid();const meta={id:id,name:file.name,size:file.size,type:file.type,kind:kindFor(file),lastModified:file.lastModified};
+  try{await saveAssetFile(id,file);p.assets.push(meta);state.liveAssets.push(Object.assign({},meta,{file:file}));added++;}
+  catch(e){toast("Não foi possível salvar "+file.name+" no navegador.","error");}
+ }
+ updateProject(p);render();toast(added+" arquivo(s) importado(s).","success");
+}
+async function removeAsset(id){
+ const p=currentProject();if(!p)return;
+ p.assets=p.assets.filter(function(a){return a.id!==id;});state.liveAssets=state.liveAssets.filter(function(a){return a.id!==id;});
+ try{await deleteAssetFile(id);}catch(e){}updateProject(p);render();
+}
