@@ -27,6 +27,11 @@ function parseBody(req) {
 }
 
 function extractOpenAI(data) {
+  if (data && data.status === "incomplete" && data.incomplete_details && data.incomplete_details.reason === "max_output_tokens") {
+    const error = new Error("A resposta atingiu o limite de saída do modelo. Divida o vídeo em partes ou use um modelo com maior limite de tokens.");
+    error.status = 502;
+    throw error;
+  }
   if (typeof data.output_text === "string" && data.output_text) return data.output_text;
   const output = Array.isArray(data.output) ? data.output : [];
   return output.flatMap(function (item) {
@@ -39,6 +44,11 @@ function extractOpenAI(data) {
 }
 
 function extractAnthropic(data) {
+  if (data && data.stop_reason === "max_tokens") {
+    const error = new Error("A resposta atingiu o limite de saída do Claude. Divida o vídeo em partes ou use um modelo com maior limite de tokens.");
+    error.status = 502;
+    throw error;
+  }
   return (Array.isArray(data.content) ? data.content : []).filter(function (part) {
     return part.type === "text" && typeof part.text === "string";
   }).map(function (part) {
@@ -48,6 +58,11 @@ function extractAnthropic(data) {
 
 function extractGemini(data) {
   const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  if (candidates[0] && candidates[0].finishReason === "MAX_TOKENS") {
+    const error = new Error("A resposta atingiu o limite de saída do Gemini. Divida o vídeo em partes ou use um modelo com maior limite de tokens.");
+    error.status = 502;
+    throw error;
+  }
   const parts = candidates[0] && candidates[0].content && Array.isArray(candidates[0].content.parts) ? candidates[0].content.parts : [];
   return parts.filter(function (part) {
     return typeof part.text === "string";
@@ -109,7 +124,7 @@ async function providerRequest(input) {
       const providerMessage = data && data.error && typeof data.error.message === "string" ? data.error.message : "";
       const safeMessage = providerMessage.slice(0, 420).replace(/(sk-[A-Za-z0-9_-]{8,}|AIza[A-Za-z0-9_-]{20,})/g, "[redacted]");
       const error = new Error(safeMessage || "O provedor recusou a solicitação. Verifique o modelo e a chave.");
-      error.status = response.status === 429 ? 429 : 502;
+      error.status = response.status === 429 || response.status === 401 || response.status === 403 ? response.status : 502;
       throw error;
     }
     const text = parse(data);
