@@ -337,15 +337,17 @@ async function exportVideo(){
  let output=null,audioContext=null;
  try{
   if(!("VideoEncoder" in window))throw new Error("Este navegador não oferece WebCodecs. Tente uma versão atual do Chrome ou Edge.");
-  if(caption)caption.textContent="Carregando codificador no dispositivo...";
-  const mb=await import("https://esm.sh/mediabunny");
+  if(caption)caption.textContent="Escolha onde salvar o MP4...";
   const size=ratioSize(p.ratio),canvas=document.createElement("canvas");canvas.width=size.width;canvas.height=size.height;
   const ctx=canvas.getContext("2d",{alpha:false});
-  let target,fileHandle=null;
+  let fileHandle=null,writable=null;
   if(typeof window.showSaveFilePicker==="function"){
    fileHandle=await window.showSaveFilePicker({suggestedName:(p.title||"what-if-video").replace(/[^a-z0-9]+/gi,"-")+".mp4",types:[{description:"Vídeo MP4",accept:{"video/mp4":[".mp4"]}}]});
-   const writable=await fileHandle.createWritable();target=new mb.StreamTarget(writable,{chunked:true});
-  }else{target=new mb.BufferTarget();}
+   writable=await fileHandle.createWritable();
+  }
+  if(caption)caption.textContent="Carregando codificador no dispositivo...";
+  const mb=await import("https://esm.sh/mediabunny");
+  const target=writable?new mb.StreamTarget(writable,{chunked:true}):new mb.BufferTarget();
   let audioBuffer=null;
   const sound=state.liveAssets.find(function(a){return a.kind==="audio"&&a.file;});
   if(sound){
